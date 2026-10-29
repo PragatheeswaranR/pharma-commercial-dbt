@@ -1,0 +1,27 @@
+version: 2
+
+# EXPOSURES — document who consumes your models. They appear in the DAG,
+# and `dbt build --select +exposure:ic_quarterly_payout_report` builds everything it needs.
+exposures:
+  - name: ic_quarterly_payout_report
+    label: IC Quarterly Payout Report
+    type: application
+    maturity: high
+    description: Quarterly payout file sent to the IC platform and Sales Ops for approval.
+    owner:
+      name: Sales Operations - IC Team
+    depends_on:
+      - ref('fct_ic_payouts')
+      - ref('fct_quota_attainment')
+
+  - name: brand_performance_dashboard
+    label: Brand Performance Dashboard
+    type: dashboard
+    maturity: medium
+    description: Weekly brand share, call activity and target HCP coverage for brand leads.
+    owner:
+      name: Commercial Analytics
+    depends_on:
+      - ref('agg_brand_market_share')
+      - ref('fct_calls')
+      - ref('dim_hcps')

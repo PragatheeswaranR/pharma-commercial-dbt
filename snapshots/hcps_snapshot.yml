@@ -1,0 +1,21 @@
+version: 2
+
+# =====================================================================
+# SNAPSHOT = SCD Type 2 history, managed by dbt.
+# Each `dbt snapshot` (or `dbt build`) compares stg_hcps with the snapshot
+# table. If a check_col changed, the old row is closed (dbt_valid_to set)
+# and a new row is opened. This is how we keep HCP->territory history.
+#
+# strategy: check     -> compare the listed columns
+# strategy: timestamp -> trust an updated_at column (cheaper, needs a reliable timestamp)
+# =====================================================================
+snapshots:
+  - name: hcps_snapshot
+    relation: ref('stg_hcps')
+    description: SCD2 history of HCP alignment, decile and specialty.
+    config:
+      schema: snapshots
+      unique_key: hcp_id
+      strategy: check
+      check_cols: ['territory_id', 'decile', 'specialty_code']
+      dbt_valid_to_current: "to_date('9999-12-31')"   # current rows get 9999-12-31 instead of NULL

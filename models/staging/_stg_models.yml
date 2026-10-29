@@ -1,0 +1,101 @@
+version: 2
+
+models:
+  - name: stg_hcps
+    description: One row per HCP — deduplicated (latest version wins) and cleaned.
+    columns:
+      - name: hcp_id
+        description: "{{ doc('hcp_id') }}"
+        data_tests:
+          - unique
+          - not_null
+          - valid_npi
+      - name: specialty_code
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('specialty_codes')
+              field: specialty_code
+      - name: territory_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('stg_territories')
+              field: territory_id
+      - name: decile
+        description: "{{ doc('decile') }}"
+        data_tests:
+          - value_between:
+              min_value: 1
+              max_value: 10
+      - name: email
+        description: Missing for ~10% of HCPs.
+        data_tests:
+          - not_null:
+              config:
+                severity: warn       # known gap: warn, don't fail the build
+
+  - name: stg_rx_weekly
+    description: Weekly TRx/NRx per HCP x product.
+    columns:
+      - name: hcp_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('stg_hcps')
+              field: hcp_id
+      - name: product_id
+        data_tests:
+          - relationships:
+              to: ref('stg_products')
+              field: product_id
+      - name: trx
+        description: "{{ doc('trx') }}"
+        data_tests: [not_null, not_negative]
+      - name: nrx
+        description: "{{ doc('nrx') }}"
+        data_tests: [not_null, not_negative]
+
+  - name: stg_calls
+    description: CRM calls (rep visits to HCPs).
+    config:
+      event_time: call_date        # lets microbatch models filter this input by batch window
+    columns:
+      - name: call_id
+        data_tests: [unique, not_null]
+      - name: call_status
+        data_tests:
+          - accepted_values:
+              values: ['Submitted', 'Cancelled', 'Planned']
+      - name: call_channel
+        data_tests:
+          - accepted_values:
+              values: ['In-Person Detail', 'Virtual Detail', 'Lunch & Learn']
+      - name: samples_dropped
+        data_tests: [not_negative]
+
+  - name: stg_products
+    columns:
+      - name: product_id
+        data_tests: [unique, not_null]
+      - name: therapeutic_area
+        data_tests:
+          - accepted_values:
+              values: ['Cardiovascular', 'Diabetes', 'Oncology', 'Respiratory', 'Neuroscience']
+
+  - name: stg_territories
+    columns:
+      - name: territory_id
+        data_tests: [unique, not_null]
+
+  - name: stg_reps
+    columns:
+      - name: rep_id
+        data_tests: [unique, not_null]
+      - name: territory_id
+        data_tests: [unique, not_null]   # exactly one rep per territory
+
+  - name: stg_quotas
+    columns:
+      - name: quota_trx
+        data_tests: [not_null, not_negative]

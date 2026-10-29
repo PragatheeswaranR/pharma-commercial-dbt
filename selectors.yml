@@ -1,0 +1,26 @@
+# =====================================================================
+# SELECTORS — named, reusable node selections.
+#   dbt build --selector weekly_refresh
+# =====================================================================
+selectors:
+  - name: weekly_refresh
+    description: Everything except ML models — the normal weekly production run.
+    definition:
+      union:
+        - method: fqn
+          value: "*"
+        - exclude:
+            - method: tag
+              value: ml
+
+  - name: ic_close
+    description: Quarter-end IC close — payouts plus every upstream dependency.
+    definition:
+      method: fqn
+      value: fct_ic_payouts
+      parents: true
+
+  - name: staging_only
+    definition:
+      method: tag
+      value: staging

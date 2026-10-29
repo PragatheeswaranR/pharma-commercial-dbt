@@ -1,0 +1,27 @@
+version: 2
+
+seeds:
+  - name: specialty_codes
+    description: Maps the vendor's specialty codes to readable names and the HCP's primary therapeutic area.
+    columns:
+      - name: specialty_code
+        data_tests: [unique, not_null]
+
+  - name: ic_product_weights
+    description: Incentive-compensation weight of each Helix brand in a rep's overall attainment. Weights sum to 1.
+    columns:
+      - name: product_id
+        data_tests: [unique, not_null]
+      - name: weight
+        data_tests:
+          - value_between:
+              min_value: 0
+              max_value: 1
+
+  - name: ic_payout_curve
+    description: >
+      Step payout curve. A rep whose weighted attainment falls in
+      [min_attainment, max_attainment) earns payout_pct x quarterly target incentive.
+    columns:
+      - name: payout_pct
+        data_tests: [not_null, not_negative]

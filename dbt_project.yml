@@ -1,0 +1,100 @@
+# =====================================================================
+# dbt_project.yml — the "control panel" of a dbt project.
+# Configs set here apply to whole folders; a model's own config() wins.
+# The "+" prefix marks a config (vs. a sub-folder name).
+# =====================================================================
+name: pharma_commercial
+version: '1.0.0'
+config-version: 2
+
+profile: pharma_commercial          # must match the top key in profiles.yml
+
+model-paths:    ["models"]
+seed-paths:     ["seeds"]
+test-paths:     ["tests"]
+macro-paths:    ["macros"]
+snapshot-paths: ["snapshots"]
+analysis-paths: ["analyses"]
+clean-targets:  ["target", "dbt_packages"]
+
+# ---------------------------------------------------------------------
+# Project variables — read anywhere with {{ var('name') }}
+# Override at run time:  dbt build --vars '{"target_decile_min": 8}'
+# ---------------------------------------------------------------------
+vars:
+  own_manufacturer: 'Helix Pharma'
+  target_decile_min: 7            # deciles >= this are "target" HCPs
+  ic_payout_cap: 2.0              # max payout = 200% of quarterly target incentive
+  enable_python_models: false     # flip to true in Module 15
+
+# ---------------------------------------------------------------------
+# Hooks that run once per dbt invocation
+# ---------------------------------------------------------------------
+on-run-start:
+  - "create schema if not exists {{ target.database }}.audit"
+  - >
+    create table if not exists {{ target.database }}.audit.dbt_run_log (
+      invocation_id varchar, node_id varchar, status varchar,
+      execution_seconds float, target_name varchar, logged_at timestamp_ltz)
+
+on-run-end:
+  - "{{ grant_schema_usage(database_schemas, 'IC_REPORTER') }}"
+  - "{{ log_run_results(results) }}"
+
+# ---------------------------------------------------------------------
+# Folder-level model configs
+# ---------------------------------------------------------------------
+models:
+  pharma_commercial:
+    +query_tag: dbt_pharma_commercial      # shows up in Snowflake QUERY_HISTORY
+    +persist_docs:
+      relation: true                       # push model descriptions into Snowflake COMMENTs
+      columns: true
+
+    staging:
+      +schema: staging
+      +materialized: view
+      +tags: ['staging']
+
+    intermediate:
+      +schema: intermediate
+      +materialized: view
+      +tags: ['intermediate']
+
+    marts:
+      +materialized: table
+      +tags: ['marts']
+      core:
+        +schema: core
+        +grants:
+          select: ['IC_REPORTER']
+      commercial:
+        +schema: commercial
+        +grants:
+          select: ['IC_REPORTER']
+      realtime:
+        +schema: realtime
+        +persist_docs: {relation: false, columns: false}   # keep dynamic tables simple
+      ml:
+        +schema: ml
+        +enabled: "{{ var('enable_python_models', false) | as_bool }}"
+        +tags: ['ml']
+
+seeds:
+  pharma_commercial:
+    +schema: reference
+    +tags: ['seeds']
+    specialty_codes:
+      +column_types:
+        specialty_code: varchar(10)
+        specialty_name: varchar(100)
+        primary_therapeutic_area: varchar(50)
+    ic_product_weights:
+      +column_types:
+        product_id: varchar(10)
+        weight: number(5,2)
+    ic_payout_curve:
+      +column_types:
+        min_attainment: number(6,3)
+        max_attainment: number(6,3)
+        payout_pct: number(5,2)

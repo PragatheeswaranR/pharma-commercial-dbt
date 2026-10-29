@@ -1,0 +1,11 @@
+version: 2
+
+models:
+  - name: agg_brand_market_share
+    description: Weekly TRx/NRx market share of each brand within its therapeutic area. Snowflake dynamic table.
+    columns:
+      - name: trx_market_share
+        data_tests:
+          - value_between:
+              min_value: 0
+              max_value: 1

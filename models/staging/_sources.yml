@@ -1,0 +1,47 @@
+version: 2
+
+# =====================================================================
+# SOURCES — declare the raw tables dbt did NOT build.
+# Reference them with {{ source('pharma_raw', 'hcps') }}, never by hardcoded name.
+# Freshness: `dbt source freshness` checks max(_loaded_at) against these limits.
+# =====================================================================
+sources:
+  - name: pharma_raw
+    description: Raw commercial data landed by the (simulated) vendor feeds and CRM.
+    database: PHARMA_DBT
+    schema: RAW
+    loaded_at_field: _loaded_at
+    freshness:                       # default for every table below
+      warn_after:  {count: 2, period: day}
+      error_after: {count: 7, period: day}
+
+    tables:
+      - name: hcps
+        description: Healthcare professional master from the vendor. Contains duplicates and messy text.
+        columns:
+          - name: hcp_npi
+            description: 10-digit National Provider Identifier (fake).
+            data_tests: [not_null]   # NOT unique here — duplicates are expected in raw
+
+      - name: rx_weekly
+        description: Weekly prescription counts (TRx/NRx) per HCP x product.
+        freshness:                   # weekly feed => looser thresholds than the default
+          warn_after:  {count: 8, period: day}
+          error_after: {count: 14, period: day}
+
+      - name: calls
+        description: CRM call activity — rep visits to HCPs.
+
+      - name: products
+        description: Product master — own (Helix Pharma) and competitor brands.
+        freshness: null              # static reference data: no freshness check
+
+      - name: territories
+        freshness: null
+
+      - name: reps
+        freshness: null
+
+      - name: quotas
+        description: Quarterly TRx quota per territory and own brand.
+        freshness: null

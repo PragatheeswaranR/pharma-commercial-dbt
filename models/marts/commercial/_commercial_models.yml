@@ -1,0 +1,116 @@
+version: 2
+
+models:
+  - name: fct_rx_weekly
+    description: Weekly prescriptions per HCP x product. Incremental (merge on rx_key).
+    columns:
+      - name: rx_key
+        description: Hash of hcp_id + product_id + week_ending_date.
+        data_tests: [unique, not_null]
+      - name: hcp_id
+        data_tests:
+          - relationships:
+              to: ref('dim_hcps')
+              field: hcp_id
+      - name: trx
+        description: "{{ doc('trx') }}"
+        data_tests: [not_negative]
+      - name: nrx
+        description: "{{ doc('nrx') }}"
+
+  - name: fct_calls
+    description: Submitted CRM calls. Microbatch incremental by month on call_date.
+    columns:
+      - name: call_id
+        data_tests: [unique, not_null]
+      - name: rep_id
+        data_tests:
+          - relationships:
+              to: ref('dim_reps')
+              field: rep_id
+
+  - name: fct_quota_attainment
+    description: Territory x own brand x quarter — credited actual TRx vs quota.
+    columns:
+      - name: attainment_key
+        data_tests: [unique, not_null]
+      - name: attainment_pct
+        description: "{{ doc('attainment_pct') }}"
+        data_tests:
+          - value_between:
+              min_value: 0
+              max_value: 5
+              config:
+                severity: warn
+
+  - name: fct_ic_payouts
+    description: Quarterly IC payout per rep.
+    columns:
+      - name: payout_key
+        data_tests: [unique, not_null]
+      - name: weighted_attainment
+        description: "{{ doc('weighted_attainment') }}"
+      - name: payout_amount
+        data_tests: [not_null, not_negative]
+
+# =====================================================================
+# UNIT TESTS (dbt 1.8+)
+# Data tests check the REAL data after it is built.
+# Unit tests check the LOGIC against tiny hand-made inputs, before trusting it.
+# Run only unit tests:  dbt test --select "fct_ic_payouts,test_type:unit"
+# =====================================================================
+unit_tests:
+  - name: ic_payout_uses_weighted_attainment_and_curve
+    description: >
+      Rep A: 110% on a 0.6-weight brand and 90% on a 0.4-weight brand -> 102% weighted
+      -> 100% band -> full quarterly target (40000 / 4 = 10000).
+      Rep B: 50% everywhere -> below threshold -> 0 payout.
+    model: fct_ic_payouts
+    given:
+      - input: ref('fct_quota_attainment')
+        rows:
+          - {territory_id: T01, product_id: P001, fiscal_quarter: '2026-Q2', quarter_start_date: '2026-04-01', attainment_pct: 1.10}
+          - {territory_id: T01, product_id: P003, fiscal_quarter: '2026-Q2', quarter_start_date: '2026-04-01', attainment_pct: 0.90}
+          - {territory_id: T02, product_id: P001, fiscal_quarter: '2026-Q2', quarter_start_date: '2026-04-01', attainment_pct: 0.50}
+          - {territory_id: T02, product_id: P003, fiscal_quarter: '2026-Q2', quarter_start_date: '2026-04-01', attainment_pct: 0.50}
+      - input: ref('dim_reps')
+        rows:
+          - {rep_id: E0001, rep_name: Rep A, region_name: Northeast, territory_id: T01, annual_target_incentive: 40000}
+          - {rep_id: E0002, rep_name: Rep B, region_name: Northeast, territory_id: T02, annual_target_incentive: 40000}
+      - input: ref('ic_product_weights')
+        rows:
+          - {product_id: P001, weight: 0.60}
+          - {product_id: P003, weight: 0.40}
+      - input: ref('ic_payout_curve')
+        rows:
+          - {min_attainment: 0.000, max_attainment: 0.850, payout_pct: 0.00}
+          - {min_attainment: 0.850, max_attainment: 1.000, payout_pct: 0.50}
+          - {min_attainment: 1.000, max_attainment: 1.050, payout_pct: 1.00}
+          - {min_attainment: 1.050, max_attainment: 99.00, payout_pct: 2.00}
+    expect:
+      rows:
+        - {rep_id: E0001, fiscal_quarter: '2026-Q2', payout_pct: 1.00, payout_amount: 10000.00}
+        - {rep_id: E0002, fiscal_quarter: '2026-Q2', payout_pct: 0.00, payout_amount: 0.00}
+
+  - name: payout_is_capped
+    description: Attainment far above plan must never pay more than ic_payout_cap (overridden to 1.5 here).
+    model: fct_ic_payouts
+    overrides:
+      vars:
+        ic_payout_cap: 1.5
+    given:
+      - input: ref('fct_quota_attainment')
+        rows:
+          - {territory_id: T01, product_id: P001, fiscal_quarter: '2026-Q2', quarter_start_date: '2026-04-01', attainment_pct: 3.00}
+      - input: ref('dim_reps')
+        rows:
+          - {rep_id: E0001, rep_name: Rep A, region_name: Northeast, territory_id: T01, annual_target_incentive: 40000}
+      - input: ref('ic_product_weights')
+        rows:
+          - {product_id: P001, weight: 1.00}
+      - input: ref('ic_payout_curve')
+        rows:
+          - {min_attainment: 1.300, max_attainment: 99.00, payout_pct: 2.00}
+    expect:
+      rows:
+        - {rep_id: E0001, payout_pct: 2.00, payout_amount: 15000.00}

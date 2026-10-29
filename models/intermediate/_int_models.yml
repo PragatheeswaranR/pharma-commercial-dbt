@@ -1,0 +1,19 @@
+version: 2
+
+models:
+  - name: int_hcp_alignment_history
+    description: "{{ doc('alignment') }}"
+    columns:
+      - name: hcp_id
+        data_tests: [not_null]
+      - name: territory_id
+        data_tests: [not_null]
+
+  - name: int_rx_credited
+    description: Rx rows credited to the territory the HCP was aligned to in that week (ephemeral).
+
+  - name: int_hcp_call_activity
+    description: Lifetime and recent call activity per HCP.
+    columns:
+      - name: hcp_id
+        data_tests: [unique, not_null]

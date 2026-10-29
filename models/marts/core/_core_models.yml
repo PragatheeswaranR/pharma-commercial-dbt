@@ -1,0 +1,77 @@
+version: 2
+
+models:
+  # ===================================================================
+  # MODEL CONTRACT + MODEL VERSIONS
+  # contract.enforced = dbt checks column names + data types BEFORE building,
+  # and pushes not_null constraints into the Snowflake DDL.
+  # versions = publish a breaking change as v2 while v1 keeps working.
+  #   ref('dim_hcps')            -> latest version (v2)
+  #   ref('dim_hcps', v=1)       -> pinned to v1
+  # ===================================================================
+  - name: dim_hcps
+    description: One row per HCP — the conformed HCP dimension used across commercial reporting.
+    latest_version: 2
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: hcp_id
+        description: "{{ doc('hcp_id') }}"
+        data_type: varchar
+        constraints:
+          - type: not_null
+          - type: primary_key        # Snowflake records it but does not enforce it
+        data_tests: [unique, not_null]
+      - name: full_name
+        data_type: varchar
+      - name: specialty_name
+        data_type: varchar
+      - name: primary_therapeutic_area
+        data_type: varchar
+      - name: state_code
+        data_type: varchar
+      - name: territory_id
+        description: Current territory alignment.
+        data_type: varchar
+        constraints:
+          - type: not_null
+      - name: decile
+        description: "{{ doc('decile') }}"
+        data_type: number(2,0)
+      - name: hcp_segment
+        data_type: varchar
+        data_tests:
+          - accepted_values:
+              values: ['High', 'Medium', 'Low']
+      - name: is_target
+        description: True when decile >= var('target_decile_min').
+        data_type: boolean
+      - name: calls_last_90d
+        data_type: number(10,0)
+      - name: last_call_date
+        data_type: date
+
+    versions:
+      - v: 2
+      - v: 1
+        deprecation_date: 2027-03-31
+        columns:
+          - include: all
+            exclude: [primary_therapeutic_area, hcp_segment, is_target, calls_last_90d, last_call_date]
+          - name: specialty_code
+            data_type: varchar
+
+  - name: dim_products
+    description: Product dimension — own and competitor brands.
+    columns:
+      - name: product_id
+        data_tests: [unique, not_null]
+
+  - name: dim_reps
+    description: Sales reps with their territory and region.
+    columns:
+      - name: rep_id
+        data_tests: [unique, not_null]
+      - name: territory_id
+        data_tests: [unique, not_null]

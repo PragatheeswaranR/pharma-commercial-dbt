@@ -1,0 +1,28 @@
+# =====================================================================
+# profiles.yml — HOW dbt connects to the warehouse.
+# Inside Snowflake Workspaces, account/user stay empty: dbt runs as you,
+# in your current session. Each "output" is a target (dev, prod).
+# Pick the target from the Workspace toolbar or with --target prod.
+# =====================================================================
+pharma_commercial:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: ""
+      user: ""
+      role: DBT_ROLE
+      warehouse: DBT_WH
+      database: PHARMA_DBT
+      schema: DEV            # dev objects land in DEV_STAGING, DEV_CORE, ...
+      threads: 4
+
+    prod:
+      type: snowflake
+      account: ""
+      user: ""
+      role: DBT_ROLE
+      warehouse: DBT_WH
+      database: PHARMA_DBT
+      schema: PROD           # prod objects land in STAGING, CORE, ... (see macros/generate_schema_name.sql)
+      threads: 8

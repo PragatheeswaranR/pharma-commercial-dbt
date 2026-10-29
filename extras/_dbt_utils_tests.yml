@@ -1,0 +1,24 @@
+# MODULE 16 — after `dbt deps` succeeds, copy this file into models/marts/commercial/
+# These tests come from the dbt_utils package instead of being hand-written.
+version: 2
+
+models:
+  - name: fct_quota_attainment
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [territory_id, product_id, quarter_start_date]
+    columns:
+      - name: quota_trx
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+
+  - name: fct_rx_weekly
+    data_tests:
+      - dbt_utils.recency:
+          datepart: day
+          field: week_ending_date
+          interval: 14
+      - dbt_utils.expression_is_true:
+          expression: "nrx <= trx"
